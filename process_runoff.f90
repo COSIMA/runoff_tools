@@ -49,7 +49,7 @@ integer(kind=int32) :: i,irecs
 
 real(kind=real32),allocatable,dimension(:,:)   :: runoff_source,runoff_model         ! 
 
-character(len=12)   :: carg,carg1
+character(len=128)   :: carg,carg1
 
 nargs=command_argument_count()
 if ( nargs < 4 ) then
