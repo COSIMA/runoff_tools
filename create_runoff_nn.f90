@@ -39,234 +39,36 @@ type(source_type) :: source
 real(kind=real64)   :: x,y
 
 integer(kind=int32) :: i,j,k
-integer(kind=int32) :: nx,ny                  ! Size of model grid
-integer(kind=int32) :: nxp,nyp                ! Size of model supergrid
 integer(kind=int32) :: ni_source,nj_source    ! Size of runoff input variable
 
-integer(kind=int32) :: ncid,vid,did           ! NetCDF ids
+integer(kind=int32) :: ncid,vid           ! NetCDF ids
 integer(kind=int32) :: dids2d(2)              ! 2D dimension ids array
 
 real(kind=real64),allocatable,dimension(:)     :: x1d_source,y1d_source ! x,y of source (spherical source)
-real(kind=real64),allocatable,dimension(:,:)   :: wrk,wrk_super
+real(kind=real64),allocatable,dimension(:,:)   :: wrk
 integer(kind=int16),allocatable,dimension(:,:) :: mask
-logical,allocatable,dimension(:,:)       ::wet
 
-character(len=128)  :: odir='',ofile=''  ! for ocean_mosaic.nc
-character(len=128)  :: gdir='',gfile=''  ! for hgrid file
-character(len=128)  :: tdir='',tfile=''  ! for topgraphy file
-character(len=256)  :: dirfile=''        ! concatenation
-
-logical             :: tripolar=.false.,x_cyclic=.false.,south_open=.false.,east_open=.false., &
-                       north_open=.false.,west_open=.false. ! BC types
+character(len=128)  :: coastfile
 
 integer(kind=int32)      :: nargs
-character(len=12)   :: carg,dimname
+character(len=32)   :: carg,dimname
 
 ! Get info on the grid from input
 nargs=command_argument_count()
 do i = 1,nargs
    call get_command_argument(i,carg)
    select case(trim(carg))
-   case ('tripolar')
-        tripolar = .true.
-        x_cyclic = .true.
-        south_open=.false.
-   case ('x_cyclic')
-        x_cyclic = .true.
-   case ('north_open')
-        north_open=.true.
-   case ('south_open')
-        south_open=.true.
-   case ('east_open')
-        south_open=.true.
-   case ('west_open')
-        west_open=.true.
+   case ('-f')
+        call get_command_argument(i+1,carg)
+        coastfile = trim(carg)
+        exit
    case DEFAULT
         write(*,*) 'Unknown argument',trim(carg)
         stop
    end select
 enddo
-if(tripolar .and. south_open) then
-  write(*,*) 'Illegal combination: tripolar=.true. and south_open=true.'
-  stop
-endif
 
-write(*,*) 'Getting model grid info'
-! Get mosaic info
-call handle_error(nf90_open('mosaic.nc',nf90_nowrite,ncid))
-call handle_error(nf90_inq_varid(ncid,'ocn_mosaic_dir',vid))
-call handle_error(nf90_get_var(ncid,vid,odir))
-call handle_error(nf90_inq_varid(ncid,'ocn_mosaic_file',vid))
-call handle_error(nf90_get_var(ncid,vid,ofile))
-call handle_error(nf90_inq_varid(ncid,'ocn_topog_dir',vid))
-call handle_error(nf90_get_var(ncid,vid,tdir))
-call handle_error(nf90_inq_varid(ncid,'ocn_topog_file',vid))
-call handle_error(nf90_get_var(ncid,vid,tfile))
-call handle_error(nf90_close(ncid))
-! Get horizontal grid
-dirfile=odir(1:scan(odir,'/',back=.true.)) // ofile(1:scan(ofile,'c',back=.true.))
-write(*,*) len_trim(dirfile),dirfile
-call handle_error(nf90_open(trim(dirfile),nf90_nowrite,ncid))
-call handle_error(nf90_inq_varid(ncid,'gridlocation',vid))
-call handle_error(nf90_get_var(ncid,vid,gdir))
-call handle_error(nf90_inq_varid(ncid,'gridfiles',vid))
-call handle_error(nf90_get_var(ncid,vid,gfile))
-call handle_error(nf90_close(ncid))
-
-! Read wet via wrk
-write(*,*) 'Creating Coastal mask'
-
-dirfile=tdir(1:scan(tdir,'/',back=.true.)) // tfile(1:scan(tfile,'c',back=.true.))
-call handle_error(nf90_open(trim(dirfile),nf90_nowrite,ncid))
-call handle_error(nf90_inq_dimid(ncid,'nx',did))
-call handle_error(nf90_inquire_dimension(ncid,did,len=nx))
-call handle_error(nf90_inq_dimid(ncid,'ny',did))
-call handle_error(nf90_inquire_dimension(ncid,did,len=ny))
-call handle_error(nf90_inq_varid(ncid,'depth',vid))
-allocate(wrk(nx,ny))
-call handle_error(nf90_get_var(ncid,vid,wrk))
-call handle_error(nf90_close(ncid))
-
-! Extend cyclic/tripolar/OB/solid
-
-allocate(wet(0:nx+1,0:ny+1))
-do j=1,ny
-   do i=1,nx
-      wet(i,j) = wrk(i,j)>0.0_real64
-   enddo
-enddo
-if ( tripolar ) then
-   do i = 0, nx+1
-      wet(i,0) = .false.
-   enddo
-   do i = 1,nx/2
-      wet(i,ny+1) = wet(nx-i+1,ny)
-   enddo
-   do j = 1, ny+1
-      wet(0,j) = wet(nx,j)
-      wet(nx+1,j) = wet(1,j)
-   enddo
-else
-   if ( south_open ) then
-      do i = 1,nx
-         wet(i,0) = wet(i,1)
-      enddo
-   else
-      do i = 1,nx
-         wet(i,0) = .false.
-      enddo
-   endif
-   if ( north_open ) then
-      do i = 1,nx
-         wet(i,ny+1) = wet(i,ny)
-      enddo
-   else
-      do i = 1,nx
-         wet(i,ny+1) = .false.
-      enddo
-   endif
-   if ( x_cyclic ) then
-      do j = 0, ny+1
-         wet(0,j) = wet(nx,j)
-         wet(nx+1,j) = wet(1,j)
-      enddo
-   else
-      if ( west_open ) then
-         do j = 0, ny+1
-            wet(0,j) = wet(1,j)
-         enddo
-      else
-         do j = 0, ny+1
-            wet(0,j) = .false.
-         enddo
-      endif
-      if ( east_open ) then
-         do j = 0, ny+1
-            wet(nx+1,j) = wet(nx,j)
-         enddo
-      else
-         do j = 0, ny+1
-            wet(nx+1,j) = .false.
-         enddo
-      endif
-   endif
-endif
-
-! Test for coast
-k = 0
-do j = 1, ny
-   do i = 1, nx
-      if( wet(i,j)  .and.  .not. all(wet(i-1:i+1,j-1:j+1))) then
-         k = k + 1
-      endif
-   enddo
-enddo
-coast%npts=k
-write(*,*) coast%npts, ' model coastal tiles'
-allocate(coast%i(coast%npts),coast%j(coast%npts),coast%x(coast%npts),coast%y(coast%npts),coast%area(coast%npts))
-k = 0
-do j = 1, ny
-   do i = 1, nx
-      if( wet(i,j)  .and.  .not. all(wet(i-1:i+1,j-1:j+1))) then
-         k = k + 1
-         coast%i(k) = i
-         coast%j(k) = j
-      endif
-   enddo
-enddo
-
-deallocate(wet)
-!
-! On mosaic "supergrid" we need to get every second point
-!
-write(*,*) 'Reading supergrid info'
-nxp = 2*nx+1
-nyp = 2*ny+1
-allocate(wrk_super(nxp,nyp))
-! Read xt
-dirfile=gdir(1:scan(gdir,'/',back=.true.)) // gfile(1:scan(gfile,'c',back=.true.))
-call handle_error(nf90_open(trim(dirfile),nf90_nowrite,ncid))
-call handle_error(nf90_inq_varid(ncid,'x',vid))
-call handle_error(nf90_get_var(ncid,vid,wrk_super))
-do j=1,ny
-   do i = 1,nx
-      wrk(i,j)= wrk_super(2*i,2*j)
-   enddo
-enddo
-
-
-do i = 1,coast%npts
-   coast%x(i)=wrk(coast%i(i),coast%j(i))
-enddo
-
-! Read yt
-call handle_error(nf90_inq_varid(ncid,'y',vid))
-call handle_error(nf90_get_var(ncid,vid,wrk_super))
-do j=1,ny
-   do i = 1,nx
-      wrk(i,j)= wrk_super(2*i,2*j)
-   enddo
-enddo
-do i = 1,coast%npts
-   coast%y(i)=wrk(coast%i(i),coast%j(i))
-enddo
-
-! Area, probably should do dxt*dyt correctly but I think this is ok.
-deallocate(wrk_super)
-allocate(wrk_super(nxp-1,nyp-1))
-call handle_error(nf90_inq_varid(ncid,'area',vid))
-call handle_error(nf90_get_var(ncid,vid,wrk_super))
-call handle_error(nf90_close(ncid))
-do j = 1, ny
-   do i = 1,nx
-      wrk(i,j) = wrk_super(2*i-1,2*j-1)+wrk_super(2*i,2*j-1)+wrk_super(2*i-1,2*j)+wrk_super(2*i,2*j)
-   enddo
-enddo
-do i = 1,coast%npts
-   coast%area(i)=wrk(coast%i(i),coast%j(i))
-enddo
-
-deallocate(wrk,wrk_super)
+call read_coast_mask(coast,coastfile)
 
 write(*,*) 'Creating kdtree'
 
@@ -343,16 +145,17 @@ allocate(source%dis(source%npts),source%idx(source%npts))
 
 write(*,*) 'Finding nearest neighbours'
 
+! Note that results%dis is the square of the distance. Need to take sqare root
+! and convert chord to distance over great circle.
 do i = 1, source%npts
    call kdtree2_n_nearest(tp=tree,qv=pos_source(:,i),nn=1,results=results)
    source%dis(i) = 2.0*asin(sqrt(results(1)%dis)/2.0_real64)*REARTH
    source%idx(i)  = results(1)%idx
 enddo
-print *,minval(source%dis),maxval(source%dis),DEG2RAD,1./DEG2RAD
 
 ! We now have the nearest neighbour to our runoff points.
 ! Write these points out to a file.
-! We also want to apply some sort of QC
+! We may also want to apply some sort of QC
 
 write(*,*) 'Writing out connection file'
 
@@ -360,6 +163,28 @@ call create_connection_file(source,coast)
 write(*,*) 'Done'
 
 contains
+
+subroutine read_coast_mask(coast,coastfile)
+   type(coast_type), intent(out) :: coast
+   character(*)                  :: coastfile
+   integer(kind=int32) :: ncid, did_ic,vid
+   call handle_error(nf90_open(trim(coastfile),nf90_nowrite,ncid))
+   call handle_error(nf90_inq_dimid(ncid,'ic',did_ic))
+   call handle_error(nf90_inquire_dimension(ncid,did_ic,len=coast%npts))
+   allocate(coast%i(coast%npts),coast%j(coast%npts),coast%x(coast%npts),coast%y(coast%npts),coast%area(coast%npts))
+   call handle_error(nf90_inq_varid(ncid,'coast_i',vid))
+   call handle_error(nf90_get_var(ncid,vid,coast%i))
+   call handle_error(nf90_inq_varid(ncid,'coast_j',vid))
+   call handle_error(nf90_get_var(ncid,vid,coast%j))
+   call handle_error(nf90_inq_varid(ncid,'coast_x',vid))
+   call handle_error(nf90_get_var(ncid,vid,coast%x))
+   call handle_error(nf90_inq_varid(ncid,'coast_y',vid))
+   call handle_error(nf90_get_var(ncid,vid,coast%y))
+   call handle_error(nf90_inq_varid(ncid,'coast_area',vid))
+   call handle_error(nf90_get_var(ncid,vid,coast%area))
+   call handle_error(nf90_close(ncid))
+end subroutine  read_coast_mask
+
 
 subroutine create_connection_file(source,coast)
    type(coast_type), intent(in) :: coast

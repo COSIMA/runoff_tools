@@ -1,6 +1,7 @@
-program create_runoff_weights
+program create_runoff_weights_spread
 ! Take the nearest neighbours file and create a file with multiple targets.
 ! i.e. spread the runoff according to a cunning plan!
+! In this version we spread to all nearby wet points not just coastal.
 !
 ! We can either 
 !
@@ -36,15 +37,22 @@ type :: coast_type
 end type coast_type
    
 type :: source_type
+   integer(int32),allocatable,dimension(:) :: idx
    integer(int32),allocatable,dimension(:) :: i
    integer(int32),allocatable,dimension(:) :: j
    real(kdkind),allocatable,dimension(:)   :: x
    real(kdkind),allocatable,dimension(:)   :: y
    real(kdkind),allocatable,dimension(:)   :: area
    real(kdkind),allocatable,dimension(:)   :: dis
-   integer(int32),allocatable,dimension(:) :: idx
 end type source_type
 
+type :: wet_type
+   integer(int32),allocatable,dimension(:) :: i
+   integer(int32),allocatable,dimension(:) :: j
+   real(kdkind),allocatable,dimension(:)   :: x
+   real(kdkind),allocatable,dimension(:)   :: y
+   real(kdkind),allocatable,dimension(:)   :: area
+end type wet_type
 
 
 
@@ -53,13 +61,14 @@ real(kind=real64),parameter             :: REARTH = 6.371d3  !km
 
 
 
-real(kdkind), allocatable,dimension(:,:) :: pos_source,pos_coast,pos_nn
+real(kdkind), allocatable,dimension(:,:) :: pos_source,pos_wet,pos_nn
 type(kdtree2_result),allocatable,dimension(:) :: results
 type(kdtree2),pointer    :: tree
 
 type(runoff_type) :: runoff
 type(coast_type) :: coast,coast_nn
 type(source_type) :: source
+type(wet_type) :: wet
 
 integer(kind=int32) :: nargs
 integer(kind=int32) :: method, weights
@@ -72,12 +81,13 @@ integer(kind=int32) :: num_found
 integer(kind=int32) :: num_nn=20
 integer(kind=int32) :: num_new
 integer(kind=int32) :: n_coast                 ! number of model coastal points
+integer(kind=int32) :: n_wet                 ! number of model wet points
 integer(kind=int32) :: n_source               ! Number of source runoff tiles
 
 real(kind=real64)   :: x,y
 real(kind=real64)   :: escale,area_source,dist,x_source,y_source,z_source
 real(kind=real64)   :: R2_max=(50.0/REARTH)**2 ! 50km
-real(kind=real64)   :: R_max=50.0 ! 50km
+integer(kind=int32)   :: R_max=50 ! 50km
 
 real(kind=real64),allocatable,dimension(:)     :: wgt_tmp       ! temporary array for holding local weights.
 integer(kind=int32),allocatable,dimension(:)   :: n_distribute  ! Number of points source is distibuted to.
@@ -137,23 +147,24 @@ end select
 
 !call read_connection_file_nn(source,coast,coast_nn,qc_nn)
 call read_connection_file_nn(source,coast,coast_nn)
+call read_wet_file(wet)
 
 n_coast = size(coast%x)
 n_source = size(source%x) ! Same size for coast_nn and qc_nn
-
+n_wet = size(wet%x)
 
 write(*,*) 'Creating kdtree'
 
 ! Points on surface of sphere radius 1
-allocate(pos_coast(3,n_coast))
-do i = 1,n_coast
-   pos_coast(1,i) =  cos(coast%x(i)*DEG2RAD)*cos(coast%y(i)*DEG2RAD)
-   pos_coast(2,i) =  sin(coast%x(i)*DEG2RAD)*cos(coast%y(i)*DEG2RAD)
-   pos_coast(3,i) =  sin(coast%y(i)*DEG2RAD)
+allocate(pos_wet(3,n_wet))
+do i = 1,n_wet
+   pos_wet(1,i) =  cos(wet%x(i)*DEG2RAD)*cos(wet%y(i)*DEG2RAD)
+   pos_wet(2,i) =  sin(wet%x(i)*DEG2RAD)*cos(wet%y(i)*DEG2RAD)
+   pos_wet(3,i) =  sin(wet%y(i)*DEG2RAD)
 enddo
 ! Create tree we would like results to be sorted.
 
-tree => kdtree2_create(pos_coast,sort=.true.,rearrange=.true.)  !?? on the rearrange
+tree => kdtree2_create(pos_wet,sort=.true.,rearrange=.true.)  !?? on the rearrange
 
 allocate(pos_source(3,n_source),pos_nn(3,n_source))
 
@@ -187,8 +198,8 @@ select case (method)
       do i = 1, n_source
          call kdtree2_n_nearest(tp=tree,qv=pos_nn(:,i),nn=num_nn,results=results)
          do n = 1,num_nn
-            idx_i(n) = coast%i(results(n)%idx)
-            idx_j(n) = coast%j(results(n)%idx)
+            idx_i(n) = wet%i(results(n)%idx)
+            idx_j(n) = wet%j(results(n)%idx)
          enddo
 
          call test_adjacency(idx_i,idx_j,i_cyc,num_nn,good)  ! test if we can fid a path fro the closest
@@ -224,8 +235,8 @@ select case (method)
          endif
 
          do n = 1,min(num_max,num_found)
-            idx_i(n) = coast%i(results(n)%idx)
-            idx_j(n) = coast%j(results(n)%idx)
+            idx_i(n) = wet%i(results(n)%idx)
+            idx_j(n) = wet%j(results(n)%idx)
          enddo
             
          call test_adjacency(idx_i,idx_j,i_cyc,min(num_max,num_found),good)  ! test if we can fid a path fro the closest
@@ -250,14 +261,14 @@ deallocate(coast_nn%i,coast_nn%j,coast_nn%x,coast_nn%y,coast_nn%area)
 deallocate(results)
 deallocate(idx_i,idx_j)
 
-write(*,*) 'Number of coastal points to be mapped to',iptr
+write(*,*) 'Number of ocean points to be mapped to',iptr
 
 allocate(runoff%weight(iptr),runoff%idx(iptr),runoff%i(iptr),runoff%j(iptr),runoff%x(iptr),runoff%y(iptr))
 do i=1,iptr
-   runoff%i(i)=coast%i(idx_tmp(i))
-   runoff%j(i)=coast%j(idx_tmp(i))
-   runoff%x(i)=coast%x(idx_tmp(i))
-   runoff%y(i)=coast%y(idx_tmp(i))
+   runoff%i(i)=wet%i(idx_tmp(i))
+   runoff%j(i)=wet%j(idx_tmp(i))
+   runoff%x(i)=wet%x(idx_tmp(i))
+   runoff%y(i)=wet%y(idx_tmp(i))
 enddo
 do i=1,iptr
    runoff%idx(i)=i_tmp(i)
@@ -279,7 +290,7 @@ select case(weights)
          iptr = iptr_tmp
          do j = 1, n_distribute(i)
               iptr = iptr + 1
-              runoff%weight(iptr)=wgt_tmp(j)/coast%area(idx_tmp(iptr))
+              runoff%weight(iptr)=wgt_tmp(j)/wet%area(idx_tmp(iptr))
          enddo
       enddo
    case(2)
@@ -293,16 +304,16 @@ select case(weights)
          z_source = pos_source(3,i)
          do j = 1, n_distribute(i)
               iptr = iptr + 1
-              dist = (pos_coast(1,idx_tmp(iptr))-x_source)**2 + &
-                     (pos_coast(2,idx_tmp(iptr))-y_source)**2 + &
-                     (pos_coast(3,idx_tmp(iptr))-z_source)**2 
+              dist = (pos_wet(1,idx_tmp(iptr))-x_source)**2 + &
+                     (pos_wet(2,idx_tmp(iptr))-y_source)**2 + &
+                     (pos_wet(3,idx_tmp(iptr))-z_source)**2 
               wgt_tmp(j) = exp(-dist/escale)
          enddo
          wgt_tmp(1:n_distribute(i)) =  wgt_tmp(1:n_distribute(i))*area_source/sum(wgt_tmp(1:n_distribute(i)))
          iptr = iptr_tmp
          do j = 1, n_distribute(i)
               iptr = iptr + 1
-              runoff%weight(iptr)=wgt_tmp(j)/coast%area(idx_tmp(iptr))
+              runoff%weight(iptr)=wgt_tmp(j)/wet%area(idx_tmp(iptr))
               !runoff%weight(idx_tmp(iptr))=wgt_tmp(j)
          enddo
       enddo
@@ -317,16 +328,16 @@ select case(weights)
          z_source = pos_nn(3,i)
          do j = 1, n_distribute(i)
               iptr = iptr + 1
-              dist = (pos_coast(1,idx_tmp(iptr))-x_source)**2 + &
-                     (pos_coast(2,idx_tmp(iptr))-y_source)**2 + &
-                     (pos_coast(3,idx_tmp(iptr))-z_source)**2 
+              dist = (pos_wet(1,idx_tmp(iptr))-x_source)**2 + &
+                     (pos_wet(2,idx_tmp(iptr))-y_source)**2 + &
+                     (pos_wet(3,idx_tmp(iptr))-z_source)**2 
               wgt_tmp(j) = exp(-dist/escale)
          enddo
          wgt_tmp(1:n_distribute(i)) =  wgt_tmp(1:n_distribute(i))*area_source/sum(wgt_tmp(1:n_distribute(i)))
          iptr = iptr_tmp
          do j = 1, n_distribute(i)
               iptr = iptr + 1
-              runoff%weight(iptr)=wgt_tmp(j)/coast%area(idx_tmp(iptr))
+              runoff%weight(iptr)=wgt_tmp(j)/wet%area(idx_tmp(iptr))
          enddo
       enddo
 end select   
@@ -335,6 +346,42 @@ call write_weights_file(source,runoff)
 write(*,*) 'Done'
 
 contains
+
+subroutine read_wet_file(wet)
+   type(wet_type), intent(out) :: wet
+!   integer(kind=int32),allocatable,intent(out) :: qc
+   integer(int32) :: iw
+   integer(int32) :: ncid, did_iw
+   integer(int32) :: wet_i_id,wet_j_id
+   integer(int32) :: wet_x_id,wet_y_id
+   integer(int32) :: wet_area_id
+
+
+   call handle_error(nf90_open('model_wet.nc',NF90_NOWRITE,ncid))
+   call handle_error(nf90_inq_dimid(ncid,'iw',did_iw))
+   call handle_error(nf90_inquire_dimension(ncid,did_iw,len=iw))
+!
+! Do allocations
+!
+   allocate(wet%i(iw),wet%j(iw),wet%x(iw),wet%y(iw),wet%area(iw))
+
+   call handle_error(nf90_inq_varid(ncid,'wet_i',wet_i_id))
+   call handle_error(nf90_inq_varid(ncid,'wet_j',wet_j_id))
+   call handle_error(nf90_inq_varid(ncid,'wet_x',wet_x_id))
+   call handle_error(nf90_inq_varid(ncid,'wet_y',wet_y_id))
+   call handle_error(nf90_inq_varid(ncid,'wet_area',wet_area_id))
+
+
+! Get it here
+   call handle_error(nf90_get_var(ncid,wet_i_id,wet%i))
+   call handle_error(nf90_get_var(ncid,wet_j_id,wet%j))
+   call handle_error(nf90_get_var(ncid,wet_x_id,wet%x))
+   call handle_error(nf90_get_var(ncid,wet_y_id,wet%y))
+   call handle_error(nf90_get_var(ncid,wet_area_id,wet%area))
+
+   call handle_error(nf90_close(ncid))
+
+end subroutine read_wet_file
 
 !subroutine read_connection_file_nn(source,coast,coast_nn,qc)
 subroutine read_connection_file_nn(source,coast,coast_nn)
@@ -500,4 +547,4 @@ if ( error_flag  /= nf90_noerr ) then
 endif
 end subroutine handle_error
     
-end program create_runoff_weights
+end program create_runoff_weights_spread
