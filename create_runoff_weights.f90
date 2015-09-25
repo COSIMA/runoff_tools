@@ -104,7 +104,7 @@ do i = 1,nargs,2
       read(carg1,'(I)') num_nn
       num_max=num_nn
    case('-r')
-      read(carg1,'(I)') r_max
+      read(carg1,*) r_max
       R2_max=(R_max/REARTH)**2
    case DEFAULT
         write(*,*) 'Unknown argument',trim(carg)
