@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Assume we have mosaic.nc, topog.nc etc in this directory. I'm using the GFDL 0.1 degree tripolar grid.
+
+
+# To create a runoff where we allow the runoff to spread into the ocean. We now allow the runoff to be spread over 40 points.
+
+
+create_model_coast -tripolar
+create_runoff_nn -f model_coast.nc
+create_model_wet
+create_runoff_weights_spread -m 1 -w 1 -n 40
+process_runoff -i runoff.daitren.iaf.10FEB2011.nc -o runoff_spread_n40_r50.nc
