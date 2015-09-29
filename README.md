@@ -22,6 +22,12 @@ process_runoff.f90        ! Create the runoff files using masks and weights from
 kdtree2.f90               ! module from the wonderful KDTREE 2 package written by Matthew Kennel.
                            http://arxiv.org/abs/physics/0408067
                            https://github.com/jmhodges/kdtree2
+
+ferret/make_mask_daitren.jnl ! Create a mask of the original runoff. We only want nonzero runoff. Creates a file runoff_mask.nc
+
+scripts/example_coast       ! Create a runoff file spreding the runoff along the coast
+
+scripts/example_spre4ad       ! Create a runoff file spreding the runoff along the coast and out to the open ocean
                            
                            
 General notes.

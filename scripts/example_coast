@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# Assume we have mosaic.nc, topog.nc etc in this directory. I'm using the GFDL 0.1 degree tripolar grid.
+
+# Let's create a runoff grid with runoff restricted to points touching the coast (no spread to sea)
+# From the point closest to the source we will spread the runoff out by 50km (default) along the coast (up to 25 points)
+
+create_model_coast -tripolar
+create_runoff_nn -f model_coast.nc
+create_runoff_weights -m 1 -w 1 -n 25
+process_runoff -i runoff.daitren.iaf.10FEB2011.nc -o runoff_coastal_n25_r50.nc
