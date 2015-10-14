@@ -48,6 +48,8 @@ integer(kind=int32) :: i,irecs
 
 
 real(kind=real32),allocatable,dimension(:,:)   :: runoff_source,runoff_model         ! 
+real(kind=real64),allocatable,dimension(:,:)   :: area_source, area_model
+real(kind=real64),allocatable,dimension(:)     :: lon_model, lat_model
 
 character(len=128)   :: carg,carg1
 
@@ -89,6 +91,8 @@ call setup_model_file(source_info,model_info)
 do irecs = 1,source_info%nrecs
     write(*,*) 'Record',irecs
     call process_record(source_info,model_info,source,model,runoff_source,runoff_model,irecs)
+    write(*,*) 'global area sum of source runoff = ', sum(runoff_source*area_source)
+    write(*,*) 'global area sum of target runoff = ', sum(runoff_model*area_model)
 enddo
 call handle_error(nf90_close(source_info%ncid))
 call handle_error(nf90_close(model_info%ncid))
@@ -124,36 +128,51 @@ end subroutine process_record
 subroutine setup_model_file(source_info,model_info)
    type(nc_info_type),intent(inout) :: source_info
    type(nc_info_type),intent(inout) :: model_info
-   integer(kind=int32)              :: id_x,id_y,id_t
-character(len=32)::dummy
-integer:: nats,i
+   integer(kind=int32)              :: id_x,id_y,id_t, id_lon, id_lat, id_area
+   character(len=32)::dummy
+   integer:: nats,i
    call handle_error(nf90_create(trim(model_info%fname),ior(nf90_netcdf4,nf90_clobber),model_info%ncid))
    call handle_error(nf90_def_dim(model_info%ncid,'nx',model_info%idim,id_x))
    call handle_error(nf90_def_dim(model_info%ncid,'ny',model_info%jdim,id_y))
    call handle_error(nf90_def_dim(model_info%ncid,'time',nf90_unlimited,id_t))
+   call handle_error(nf90_def_var(model_info%ncid,'nx',nf90_double,(/ id_x /), id_lon))
+   call handle_error(nf90_put_att(model_info%ncid, id_lon, "long_name", "longitude"))
+   call handle_error(nf90_put_att(model_info%ncid, id_lon, "units", "degrees_east"))
+   call handle_error(nf90_put_att(model_info%ncid, id_lon, "cartesian_axis", "X"))
+   call handle_error(nf90_def_var(model_info%ncid,'ny',nf90_double,(/ id_y /), id_lat))
+   call handle_error(nf90_put_att(model_info%ncid, id_lat, "long_name", "latitude"))
+   call handle_error(nf90_put_att(model_info%ncid, id_lat, "units", "degrees_north"))
+   call handle_error(nf90_put_att(model_info%ncid, id_lat, "cartesian_axis", "Y"))
    call handle_error(nf90_def_var(model_info%ncid,'time',nf90_double,(/ id_t /), model_info%tid))
+   call handle_error(nf90_def_var(model_info%ncid,'area',nf90_float,(/ id_x,id_y/), id_area, &
+                                  chunksizes=(/ 200,200/),deflate_level=1,shuffle=.true.))
    call handle_error(nf90_def_var(model_info%ncid,'runoff',nf90_float,(/ id_x,id_y,id_t /), model_info%vid, &
                                   chunksizes=(/ 200,200,1 /),deflate_level=1,shuffle=.true.))
    call handle_error(nf90_copy_att(source_info%ncid,source_info%vid,'units',model_info%ncid,model_info%vid))
    call handle_error(nf90_copy_att(source_info%ncid,source_info%tid,'units',model_info%ncid,model_info%tid))
 
    call handle_error(nf90_inquire_variable(source_info%ncid,source_info%tid,name=dummy,natts=nats))
-print *,trim(dummy),nats
-do i=1,nats
-   call handle_error(nf90_inq_attname(source_info%ncid,source_info%tid,i,dummy))
-   print *,trim(dummy),len_trim(dummy)
-enddo
-
-
+   print *,trim(dummy),nats
+   do i=1,nats
+      call handle_error(nf90_inq_attname(source_info%ncid,source_info%tid,i,dummy))
+      print *,trim(dummy),len_trim(dummy)
+   enddo
    call handle_error(nf90_copy_att(source_info%ncid,source_info%tid,'calendar',model_info%ncid,model_info%tid))
    call handle_error(nf90_enddef(model_info%ncid,h_minfree=4096))
+
+   call handle_error(nf90_put_var(model_info%ncid,id_lon,lon_model))
+   call handle_error(nf90_put_var(model_info%ncid,id_lat,lat_model))
+   call handle_error(nf90_put_var(model_info%ncid,id_area,area_model))   
+
+
+
 end subroutine setup_model_file
 
 
 
 subroutine get_source_info(info)
    type(nc_info_type),intent(inout) :: info
-   integer                          :: dids(3)
+   integer                          :: dids(3), vid
    character(len=32)                :: time_name
    call handle_error(nf90_open(trim(info%fname),nf90_nowrite,info%ncid))
    call handle_error(nf90_inq_varid(info%ncid,'runoff',info%vid))
@@ -162,17 +181,80 @@ subroutine get_source_info(info)
    call handle_error(nf90_inquire_dimension(info%ncid,dids(2),len=info%jdim))
    call handle_error(nf90_inquire_dimension(info%ncid,dids(3),len=info%nrecs,name=time_name))
    call handle_error(nf90_inq_varid(info%ncid,trim(time_name),info%tid))
+   allocate(area_source(info%idim,info%jdim))
+   call handle_error(nf90_inq_varid(info%ncid,'area',vid))
+   call handle_error(nf90_get_var(info%ncid, vid, area_source ))
+
 end subroutine get_source_info
 
 subroutine get_model_info(info)
    type(nc_info_type),intent(inout) :: info
-   integer                          :: ncid,vid,dids(2)
+   integer                          :: ncid,vid,dids(2),i,j,ind
+   character(len=128)  :: odir='',ofile=''  ! for ocean_mosaic.nc
+   character(len=128)  :: gdir='',gfile=''  ! for hgrid file
+   character(len=256)  :: dirfile=''        ! concatenation
+   logical             :: fexist
+   real(kind=real64),allocatable :: wrk_super(:,:)
+
    call handle_error(nf90_open('topog.nc',nf90_nowrite,ncid))
    call handle_error(nf90_inq_varid(ncid,'depth',vid))
    call handle_error(nf90_inquire_variable(ncid,vid,dimids=dids))
    call handle_error(nf90_inquire_dimension(ncid,dids(1),len=info%idim))
    call handle_error(nf90_inquire_dimension(ncid,dids(2),len=info%jdim))
    call handle_error(nf90_close(ncid))
+
+   allocate(area_model(info%idim,info%jdim))
+   call handle_error(nf90_open('mosaic.nc',nf90_nowrite,ncid))
+   call handle_error(nf90_inq_varid(ncid,'ocn_mosaic_dir',vid))
+   call handle_error(nf90_get_var(ncid,vid,odir))
+   call handle_error(nf90_inq_varid(ncid,'ocn_mosaic_file',vid))
+   call handle_error(nf90_get_var(ncid,vid,ofile))
+   dirfile=odir(1:scan(odir,'/',back=.true.)) // ofile(1:scan(ofile,'c',back=.true.))
+   inquire(file=trim(dirfile),exist=fexist)
+   if ( .not. fexist ) then
+      write(*,*) 'ocn_mosaic_dir/ocn_mosaic_file =',trim(dirfile), ' does not exist. Bailing out' 
+      stop 1
+   endif
+   call handle_error(nf90_open(trim(dirfile),nf90_nowrite,ncid))
+   call handle_error(nf90_inq_varid(ncid,'gridlocation',vid))
+   call handle_error(nf90_get_var(ncid,vid,gdir))
+   call handle_error(nf90_inq_varid(ncid,'gridfiles',vid))
+   call handle_error(nf90_get_var(ncid,vid,gfile))
+   call handle_error(nf90_close(ncid))
+   dirfile=gdir(1:scan(gdir,'/',back=.true.)) // gfile(1:scan(gfile,'c',back=.true.))
+   inquire(file=trim(dirfile),exist=fexist)
+   if ( .not. fexist ) then
+      write(*,*) 'gridlocation/gridfiles =',trim(dirfile), ' does not exist. Bailing out' 
+      stop 1
+   endif
+   call handle_error(nf90_open(trim(dirfile),nf90_nowrite,ncid))
+   allocate(wrk_super(2*info%idim,2*info%jdim))
+   call handle_error(nf90_inq_varid(ncid,'area',vid))
+   call handle_error(nf90_get_var(ncid,vid,wrk_super))
+
+   do j = 1, info%jdim
+      do i = 1,info%idim
+         area_model(i,j) = wrk_super(2*i-1,2*j-1)+wrk_super(2*i,2*j-1)+wrk_super(2*i-1,2*j)+wrk_super(2*i,2*j)
+      enddo
+   enddo
+   deallocate(wrk_super)
+   allocate(lon_model(info%idim))
+   allocate(lat_model(info%jdim))
+   allocate(wrk_super(2*info%idim+1,2*info%jdim+1))
+   call handle_error(nf90_inq_varid(ncid,'x',vid))
+   call handle_error(nf90_get_var(ncid,vid,wrk_super))
+   do i = 1, info%idim
+      lon_model(i) = wrk_super(2*i,2)
+   enddo
+   call handle_error(nf90_inq_varid(ncid,'y',vid))
+   call handle_error(nf90_get_var(ncid,vid,wrk_super))
+   ind = info%idim/4;
+   do j = 1, info%jdim
+      lat_model(j) = wrk_super(2*ind+1,2*j)
+   enddo
+   deallocate(wrk_super)
+   call handle_error(nf90_close(ncid))
+
 end subroutine get_model_info
 
 !subroutine read_connection_file_nn(source,coast,coast_nn,qc)
