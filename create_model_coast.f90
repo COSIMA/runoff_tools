@@ -78,6 +78,7 @@ if(istat /= 0) attributes%creator = 'A mysterious entity'
 nargs=command_argument_count()
 if ( nargs == 0 ) then
    write(*,*) 'No arguments, all solid boundaries'
+else
 do i = 1,nargs
    call get_command_argument(i,carg)
    select case(trim(carg))
