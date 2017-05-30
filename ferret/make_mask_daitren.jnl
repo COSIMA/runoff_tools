@@ -9,4 +9,4 @@ can mode upcase
 use $1
 let mask = if runoff[l=@min] then 1 else 0  ! Any point that has nonzero runoff at any point in the time series gets a 1
 set var/outtype=short/bad=128 mask         ! Short integer
-save/file=runoff_mask.nc/clob mask,area   ! Save mask and area
+save/file=runoff_mask.nc/clob mask,area    ! Save mask and area

@@ -88,6 +88,7 @@ module kdtree2_priority_queue_module
   public :: pq_create
   public :: pq_delete, pq_insert
   public :: pq_extract_max, pq_max, pq_replace_max, pq_maxpri
+
   private
 
 contains

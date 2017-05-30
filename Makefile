@@ -14,7 +14,7 @@
 FLAGSALWAYS = -u -warn all  # for both optimization and debugging
 FLAGSMACHINE=
 #FLAGSOPT=-O3 -ipo -fpe0 ${FLAGSMACHINE} -fno-alias 
-FLAGSOPT=-O3 -g -traceback -fpe0 ${FLAGSMACHINE} -fno-alias
+FLAGSOPT=-O2 -g -traceback -fpe0 ${FLAGSMACHINE} -fno-alias
 FLAGSDEBUG= -check all -traceback  #-g #-traceback # -C
 F90=ifort
 

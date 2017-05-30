@@ -50,12 +50,14 @@ program process_runoff
   real(kind=real32),allocatable,dimension(:,:)   :: runoff_source,runoff_model         ! 
 
   character(len=128)   :: carg,carg1
+  character(len=32)   :: var_name
 
   nargs=command_argument_count()
   if ( nargs < 4 ) then
      write(*,*) 'ERROR: Usage :: process_runoff -i infile -o outfile'
      stop 1
   endif
+  var_name = 'runoff'
   do i = 1,nargs,2
      call get_command_argument(i,carg)
      call get_command_argument(i+1,carg1)
@@ -65,6 +67,8 @@ program process_runoff
      case('-o')
         model_info%fname=trim(carg1)
         ! Placeholder
+     case('-v')
+        var_name=trim(carg1)
      case DEFAULT
         write(*,*) 'Unknown argument',trim(carg)
         stop
@@ -75,7 +79,7 @@ program process_runoff
   write(*,*) 'Reading weights'
   call read_weights_file(source,model)
   write(*,*) 'Reading source info'
-  call get_source_info(source_info)
+  call get_source_info(source_info,var_name)
   write(*,*) 'Reading model info'
   call get_model_info(model_info)
 
@@ -128,35 +132,50 @@ contains
     character(len=32)::dummy
     integer:: nats,i
     call handle_error(nf90_create(trim(model_info%fname),ior(nf90_netcdf4,nf90_clobber),model_info%ncid))
-    call handle_error(nf90_def_dim(model_info%ncid,'nx',model_info%idim,id_x))
-    call handle_error(nf90_def_dim(model_info%ncid,'ny',model_info%jdim,id_y))
+    call handle_error(nf90_def_dim(model_info%ncid,'lat',model_info%idim,id_x))
+    call handle_error(nf90_def_dim(model_info%ncid,'lon',model_info%jdim,id_y))
     call handle_error(nf90_def_dim(model_info%ncid,'time',nf90_unlimited,id_t))
     call handle_error(nf90_def_var(model_info%ncid,'time',nf90_double,(/ id_t /), model_info%tid))
     call handle_error(nf90_def_var(model_info%ncid,'runoff',nf90_float,(/ id_x,id_y,id_t /), model_info%vid, &
          chunksizes=(/ 200,200,1 /),deflate_level=1,shuffle=.true.))
-    call handle_error(nf90_copy_att(source_info%ncid,source_info%vid,'units',model_info%ncid,model_info%vid))
-    call handle_error(nf90_copy_att(source_info%ncid,source_info%tid,'units',model_info%ncid,model_info%tid))
 
+    ! Copy time attributes
     call handle_error(nf90_inquire_variable(source_info%ncid,source_info%tid,name=dummy,natts=nats))
     print *,trim(dummy),nats
     do i=1,nats
        call handle_error(nf90_inq_attname(source_info%ncid,source_info%tid,i,dummy))
+       call handle_error(nf90_copy_att(source_info%ncid,source_info%tid,dummy,model_info%ncid,model_info%tid))
+       print *,trim(dummy),len_trim(dummy)
+    enddo
+    ! Copy variable attributes
+    call handle_error(nf90_inquire_variable(source_info%ncid,source_info%vid,name=dummy,natts=nats))
+    print *,trim(dummy),nats
+    do i=1,nats
+       call handle_error(nf90_inq_attname(source_info%ncid,source_info%vid,i,dummy))
+       call handle_error(nf90_copy_att(source_info%ncid,source_info%vid,dummy,model_info%ncid,model_info%vid))
+       print *,trim(dummy),len_trim(dummy)
+    enddo
+    ! Copy global attributes
+    call handle_error(nf90_inquire_variable(source_info%ncid,NF90_GLOBAL,name=dummy,natts=nats))
+    print *,trim(dummy),nats
+    do i=1,nats
+       call handle_error(nf90_inq_attname(source_info%ncid,NF90_GLOBAL,i,dummy))
+       call handle_error(nf90_copy_att(source_info%ncid,NF90_GLOBAL,dummy,model_info%ncid,NF90_GLOBAL))
        print *,trim(dummy),len_trim(dummy)
     enddo
 
-
-    call handle_error(nf90_copy_att(source_info%ncid,source_info%tid,'calendar',model_info%ncid,model_info%tid))
     call handle_error(nf90_enddef(model_info%ncid,h_minfree=4096))
   end subroutine setup_model_file
 
 
 
-  subroutine get_source_info(info)
+  subroutine get_source_info(info,var_name)
     type(nc_info_type),intent(inout) :: info
+    character(len=32),intent(in)     :: var_name
     integer                          :: dids(3)
     character(len=32)                :: time_name
     call handle_error(nf90_open(trim(info%fname),nf90_nowrite,info%ncid))
-    call handle_error(nf90_inq_varid(info%ncid,'runoff',info%vid))
+    call handle_error(nf90_inq_varid(info%ncid,var_name,info%vid))
     call handle_error(nf90_inquire_variable(info%ncid,info%vid,dimids=dids))
     call handle_error(nf90_inquire_dimension(info%ncid,dids(1),len=info%idim))
     call handle_error(nf90_inquire_dimension(info%ncid,dids(2),len=info%jdim))
