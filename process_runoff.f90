@@ -132,8 +132,8 @@ contains
     character(len=32)::dummy
     integer:: nats,i
     call handle_error(nf90_create(trim(model_info%fname),ior(nf90_netcdf4,nf90_clobber),model_info%ncid))
-    call handle_error(nf90_def_dim(model_info%ncid,'lat',model_info%idim,id_x))
-    call handle_error(nf90_def_dim(model_info%ncid,'lon',model_info%jdim,id_y))
+    call handle_error(nf90_def_dim(model_info%ncid,'lon',model_info%idim,id_x))
+    call handle_error(nf90_def_dim(model_info%ncid,'lat',model_info%jdim,id_y))
     call handle_error(nf90_def_dim(model_info%ncid,'time',nf90_unlimited,id_t))
     call handle_error(nf90_def_var(model_info%ncid,'time',nf90_double,(/ id_t /), model_info%tid))
     call handle_error(nf90_def_var(model_info%ncid,'runoff',nf90_float,(/ id_x,id_y,id_t /), model_info%vid, &
