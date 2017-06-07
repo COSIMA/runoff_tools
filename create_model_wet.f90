@@ -13,16 +13,9 @@ program create_model_wet
   !
   use iso_fortran_env
   use netcdf
+  use runoff_modules
+  
   implicit none
-
-  type :: wet_type
-     integer(kind=int32)                     :: npts
-     integer(kind=int32),allocatable,dimension(:) :: i
-     integer(kind=int32),allocatable,dimension(:) :: j
-     real(kind=real64),allocatable,dimension(:)   :: x
-     real(kind=real64),allocatable,dimension(:)   :: y
-     real(kind=real64),allocatable,dimension(:)   :: area
-  end type wet_type
 
   type(wet_type) :: wet
 
@@ -191,63 +184,5 @@ program create_model_wet
 
   call create_wet_file(wet)
   write(*,*) 'Done'
-
-contains
-
-  subroutine create_wet_file(wet)
-    type(wet_type), intent(in) :: wet
-    integer(kind=int32) :: ncid, did_ic
-    integer(kind=int32) :: wet_i_id,wet_j_id
-    integer(kind=int32) :: wet_x_id,wet_y_id
-    integer(kind=int32) :: wet_area_id
-
-    call handle_error(nf90_create('model_wet.nc',ior(NF90_CLOBBER,NF90_NETCDF4),ncid))
-    call handle_error(nf90_def_dim(ncid,'iw',wet%npts,did_ic))
-    !
-    ! These are for ALL the model wetal points
-    !
-    call handle_error(nf90_def_var(ncid,'wet_i',nf90_int,did_ic,wet_i_id))
-    call handle_error(nf90_put_att(ncid,wet_i_id,'long_name','model i index'))
-    call handle_error(nf90_def_var(ncid,'wet_j',nf90_int,did_ic,wet_j_id))
-    call handle_error(nf90_put_att(ncid,wet_j_id,'long_name','model j index'))
-    call handle_error(nf90_def_var(ncid,'wet_x',nf90_double,did_ic,wet_x_id))
-    call handle_error(nf90_put_att(ncid,wet_x_id,'long_name','model longitude'))
-    call handle_error(nf90_put_att(ncid,wet_x_id,'units','degrees_E'))
-    call handle_error(nf90_def_var(ncid,'wet_y',nf90_double,did_ic,wet_y_id))
-    call handle_error(nf90_put_att(ncid,wet_y_id,'long_name','model latitude'))
-    call handle_error(nf90_put_att(ncid,wet_y_id,'units','degrees_N'))
-    call handle_error(nf90_def_var(ncid,'wet_area',nf90_double,did_ic,wet_area_id))
-    call handle_error(nf90_put_att(ncid,wet_area_id,'long_name','model area'))
-    call handle_error(nf90_put_att(ncid,wet_area_id,'units','m^2'))
-
-    call handle_error(nf90_enddef(ncid,h_minfree=4096))
-
-    ! Put it there
-    call handle_error(nf90_put_var(ncid,wet_i_id,wet%i))
-    call handle_error(nf90_put_var(ncid,wet_j_id,wet%j))
-    call handle_error(nf90_put_var(ncid,wet_x_id,wet%x))
-    call handle_error(nf90_put_var(ncid,wet_y_id,wet%y))
-    call handle_error(nf90_put_var(ncid,wet_area_id,wet%area))
-
-    call handle_error(nf90_close(ncid))
-
-  end subroutine create_wet_file
-
-  subroutine handle_error(error_flag,isfatal,err_string)
-    ! Simple error handle for NetCDF
-    integer(kind=int32),intent(in) :: error_flag
-    logical, intent(in),optional :: isfatal
-    character(*), intent(in),optional :: err_string
-    logical            :: fatal
-    fatal = .true.
-    if(present(isfatal)) fatal=isfatal
-    if ( error_flag  /= nf90_noerr ) then
-       if ( fatal ) then
-          write(*,*) 'FATAL ERROR:',nf90_strerror(error_flag)
-          if (present(err_string)) write(*,*) trim(err_string)
-          stop
-       endif
-    endif
-  end subroutine handle_error
 
 end program create_model_wet

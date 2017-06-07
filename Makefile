@@ -44,11 +44,11 @@ MY_DIR=`basename ${PWD}`
 
 all:	create_runoff_nn create_runoff_weights process_runoff create_model_coast create_model_wet create_runoff_weights_spread
 
-create_model_wet: create_model_wet.o
-	${F90} ${FLAGS} -o create_model_wet create_model_wet.o  ${LDFLAGS} ${LIBS}
+create_model_wet: create_model_wet.o runoff_modules.o
+	${F90} ${FLAGS} -o create_model_wet create_model_wet.o  runoff_modules.o ${LDFLAGS} ${LIBS}
 
-create_model_coast: create_model_coast.o
-	${F90} ${FLAGS} -o create_model_coast create_model_coast.o  ${LDFLAGS} ${LIBS}
+create_model_coast: create_model_coast.o runoff_modules.o
+	${F90} ${FLAGS} -o create_model_coast create_model_coast.o runoff_modules.o ${LDFLAGS} ${LIBS}
 
 process_runoff: process_runoff.o
 	${F90} ${FLAGS} -o process_runoff process_runoff.o  ${LDFLAGS} ${LIBS}
@@ -59,10 +59,15 @@ create_runoff_weights_spread: create_runoff_weights_spread.o kdtree2.o
 create_runoff_weights: create_runoff_weights.o kdtree2.o
 	${F90} ${FLAGS} -o create_runoff_weights create_runoff_weights.o kdtree2.o  ${LDFLAGS} ${LIBS}
 
-create_runoff_nn: create_runoff_nn.o kdtree2.o
-	${F90} ${FLAGS} -o create_runoff_nn create_runoff_nn.o kdtree2.o  ${LDFLAGS} ${LIBS}
+create_runoff_nn: create_runoff_nn.o kdtree2.o runoff_modules.o
+	${F90} ${FLAGS} -o create_runoff_nn create_runoff_nn.o kdtree2.o  runoff_modules.o ${LDFLAGS} ${LIBS}
 
-create_runoff_nn.o: kdtree2.o
+
+create_model_coast.o: runoff_modules.o
+
+create_model_wet.o: runoff_modules.o
+
+create_runoff_nn.o: kdtree2.o runoff_modules.o
 
 create_runoff_weights.o: kdtree2.o
 

@@ -20,16 +20,8 @@ program create_model_coast
   !
   use iso_fortran_env
   use netcdf
+  use runoff_modules
   implicit none
-
-  type :: coast_type
-     integer(kind=int32)                     :: npts
-     integer(kind=int32),allocatable,dimension(:) :: i
-     integer(kind=int32),allocatable,dimension(:) :: j
-     real(kind=real64),allocatable,dimension(:)   :: x
-     real(kind=real64),allocatable,dimension(:)   :: y
-     real(kind=real64),allocatable,dimension(:)   :: area
-  end type coast_type
 
   type :: att_type
      character(len=64)                            :: command
@@ -367,22 +359,5 @@ contains
     call handle_error(nf90_close(ncid))
 
   end subroutine create_coast_file
-
-  subroutine handle_error(error_flag,isfatal,err_string)
-    ! Simple error handle for NetCDF
-    integer(kind=int32),intent(in) :: error_flag
-    logical, intent(in),optional :: isfatal
-    character(*), intent(in),optional :: err_string
-    logical            :: fatal
-    fatal = .true.
-    if(present(isfatal)) fatal=isfatal
-    if ( error_flag  /= nf90_noerr ) then
-       if ( fatal ) then
-          write(*,*) 'FATAL ERROR:',nf90_strerror(error_flag)
-          if (present(err_string)) write(*,*) trim(err_string)
-          stop
-       endif
-    endif
-  end subroutine handle_error
 
 end program create_model_coast
