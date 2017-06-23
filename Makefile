@@ -42,7 +42,9 @@ FLAGS= ${FLAGSMACHINE} ${FLAGSALWAYS} ${FLAGSOPT} ${INCLUDE}  #  change the last
 
 MY_DIR=`basename ${PWD}`
 
-all:	create_runoff_nn create_runoff_weights process_runoff create_model_coast create_model_wet create_runoff_weights_spread
+TARGETS =	create_runoff_nn create_runoff_weights process_runoff create_model_coast create_model_wet create_runoff_weights_spread regrid_runoff
+
+all: $(TARGETS)
 
 create_model_wet: create_model_wet.o runoff_modules.o
 	${F90} ${FLAGS} -o create_model_wet create_model_wet.o  runoff_modules.o ${LDFLAGS} ${LIBS}
@@ -50,18 +52,27 @@ create_model_wet: create_model_wet.o runoff_modules.o
 create_model_coast: create_model_coast.o runoff_modules.o
 	${F90} ${FLAGS} -o create_model_coast create_model_coast.o runoff_modules.o ${LDFLAGS} ${LIBS}
 
-process_runoff: process_runoff.o
-	${F90} ${FLAGS} -o process_runoff process_runoff.o  ${LDFLAGS} ${LIBS}
+process_runoff: process_runoff.o runoff_modules.o
+	${F90} ${FLAGS} -o process_runoff process_runoff.o  runoff_modules.o ${LDFLAGS} ${LIBS}
 
 create_runoff_weights_spread: create_runoff_weights_spread.o kdtree2.o
 	${F90} ${FLAGS} -o create_runoff_weights_spread create_runoff_weights_spread.o kdtree2.o  ${LDFLAGS} ${LIBS}
 
-create_runoff_weights: create_runoff_weights.o kdtree2.o
-	${F90} ${FLAGS} -o create_runoff_weights create_runoff_weights.o kdtree2.o  ${LDFLAGS} ${LIBS}
+create_runoff_weights: create_runoff_weights.o kdtree2.o runoff_modules.o
+	${F90} ${FLAGS} -o create_runoff_weights create_runoff_weights.o kdtree2.o runoff_modules.o ${LDFLAGS} ${LIBS}
 
 create_runoff_nn: create_runoff_nn.o kdtree2.o runoff_modules.o
 	${F90} ${FLAGS} -o create_runoff_nn create_runoff_nn.o kdtree2.o  runoff_modules.o ${LDFLAGS} ${LIBS}
 
+regrid_runoff: regrid_runoff.o kdtree2.o runoff_modules.o
+	${F90} ${FLAGS} -o regrid_runoff regrid_runoff.o kdtree2.o runoff_modules.o ${LDFLAGS} ${LIBS}
+
+make_mask: make_mask.o runoff_modules.o
+	${F90} ${FLAGS} -o make_mask make_mask.o runoff_modules.o ${LDFLAGS} ${LIBS}
+
+make_mask.o: runoff_modules.o
+
+regrid_runoff: regrid_runoff.o kdtree2.o runoff_modules.o
 
 create_model_coast.o: runoff_modules.o
 
@@ -80,4 +91,4 @@ tar:
 	cd ..; tar zcvf ${MY_DIR}.tgz ${MY_DIR}
 
 clean:
-	/bin/rm -f *.o *.mod runoff
+	/bin/rm -f *.o *.mod $(TARGETS)

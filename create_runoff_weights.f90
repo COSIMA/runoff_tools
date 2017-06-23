@@ -16,35 +16,8 @@ program create_runoff_weights
   use netcdf
   use kdtree2_precision_module
   use kdtree2_module
+  use runoff_modules
   implicit none
-
-  type :: runoff_type
-     integer(int32),allocatable,dimension(:) :: idx  !index of source array
-     integer(int32),allocatable,dimension(:) :: i    !i index of 2d model grid
-     integer(int32),allocatable,dimension(:) :: j    !j index of model grid
-     real(kdkind),allocatable,dimension(:)   :: x    !x of model grid
-     real(kdkind),allocatable,dimension(:)   :: y    !y of model grid
-     real(kdkind),allocatable,dimension(:)   :: weight    ! factor to multiply source  runoff
-  end type runoff_type
-
-  type :: coast_type
-     integer(int32),allocatable,dimension(:) :: i
-     integer(int32),allocatable,dimension(:) :: j
-     real(kdkind),allocatable,dimension(:)   :: x
-     real(kdkind),allocatable,dimension(:)   :: y
-     real(kdkind),allocatable,dimension(:)   :: area
-  end type coast_type
-
-  type :: source_type
-     integer(int32),allocatable,dimension(:) :: i
-     integer(int32),allocatable,dimension(:) :: j
-     real(kdkind),allocatable,dimension(:)   :: x
-     real(kdkind),allocatable,dimension(:)   :: y
-     real(kdkind),allocatable,dimension(:)   :: area
-     real(kdkind),allocatable,dimension(:)   :: dis
-     integer(int32),allocatable,dimension(:) :: idx
-  end type source_type
-
 
 
 
@@ -336,92 +309,6 @@ program create_runoff_weights
 
 contains
 
-  !subroutine read_connection_file_nn(source,coast,coast_nn,qc)
-  subroutine read_connection_file_nn(source,coast,coast_nn)
-    type(coast_type), intent(out) :: coast
-    type(coast_type), intent(out) :: coast_nn
-    type(source_type), intent(out) :: source
-    !   integer(kind=int32),allocatable,intent(out) :: qc
-    integer(int32) :: ic,is
-    integer(int32) :: ncid, did_ic, did_is
-    integer(int32) :: coast_i_id,coast_j_id
-    integer(int32) :: coast_x_id,coast_y_id
-    integer(int32) :: coast_area_id
-    integer(int32) :: source_i_id,source_j_id
-    integer(int32) :: source_x_id,source_y_id
-    integer(int32) :: source_area_id
-    integer(int32) :: target_i_id,target_j_id
-    integer(int32) :: target_x_id,target_y_id
-    integer(int32) :: target_area_id
-    integer(int32) :: target_idx_id
-    integer(int32) :: dist_id
-    !   integer(int32) :: qc_id
-
-
-    call handle_error(nf90_open('runoff_connection_nn.nc',NF90_NOWRITE,ncid))
-    call handle_error(nf90_inq_dimid(ncid,'ic',did_ic))
-    call handle_error(nf90_inquire_dimension(ncid,did_ic,len=ic))
-    call handle_error(nf90_inq_dimid(ncid,'is',did_is))
-    call handle_error(nf90_inquire_dimension(ncid,did_is,len=is))
-    !
-    ! Do allocations
-    !
-    allocate(coast%i(ic),coast%j(ic),coast%x(ic),coast%y(ic),coast%area(ic))
-    allocate(coast_nn%i(is),coast_nn%j(is),coast_nn%x(is),coast_nn%y(is),coast_nn%area(is))
-    allocate(source%i(is),source%j(is),source%x(is),source%y(is),source%area(is))
-    allocate(source%dis(is),source%idx(is))
-    !   allocate(qc(is))
-
-    call handle_error(nf90_inq_varid(ncid,'coast_i',coast_i_id))
-    call handle_error(nf90_inq_varid(ncid,'coast_j',coast_j_id))
-    call handle_error(nf90_inq_varid(ncid,'coast_x',coast_x_id))
-    call handle_error(nf90_inq_varid(ncid,'coast_y',coast_y_id))
-    call handle_error(nf90_inq_varid(ncid,'coast_area',coast_area_id))
-
-    call handle_error(nf90_inq_varid(ncid,'source_i',source_i_id))
-    call handle_error(nf90_inq_varid(ncid,'source_j',source_j_id))
-    call handle_error(nf90_inq_varid(ncid,'source_x',source_x_id))
-    call handle_error(nf90_inq_varid(ncid,'source_y',source_y_id))
-    call handle_error(nf90_inq_varid(ncid,'source_area',source_area_id))
-
-    call handle_error(nf90_inq_varid(ncid,'target_i',target_i_id))
-    call handle_error(nf90_inq_varid(ncid,'target_j',target_j_id))
-    call handle_error(nf90_inq_varid(ncid,'target_x',target_x_id))
-    call handle_error(nf90_inq_varid(ncid,'target_y',target_y_id))
-    call handle_error(nf90_inq_varid(ncid,'target_area',target_area_id))
-    call handle_error(nf90_inq_varid(ncid,'target_idx',target_idx_id))
-    call handle_error(nf90_inq_varid(ncid,'dist',dist_id))
-    !   call handle_error(nf90_inq_varid(ncid,'source_qc',qc_id))
-
-    ! Get it here
-    call handle_error(nf90_get_var(ncid,coast_i_id,coast%i))
-    call handle_error(nf90_get_var(ncid,coast_j_id,coast%j))
-    call handle_error(nf90_get_var(ncid,coast_x_id,coast%x))
-    call handle_error(nf90_get_var(ncid,coast_y_id,coast%y))
-    call handle_error(nf90_get_var(ncid,coast_area_id,coast%area))
-
-    call handle_error(nf90_get_var(ncid,source_i_id,source%i))
-    call handle_error(nf90_get_var(ncid,source_j_id,source%j))
-    call handle_error(nf90_get_var(ncid,source_x_id,source%x))
-    call handle_error(nf90_get_var(ncid,source_y_id,source%y))
-    call handle_error(nf90_get_var(ncid,source_area_id,source%area))
-    !
-    ! Target arrays
-    !
-
-    call handle_error(nf90_get_var(ncid,target_i_id,coast_nn%i))
-    call handle_error(nf90_get_var(ncid,target_j_id,coast_nn%j))
-    call handle_error(nf90_get_var(ncid,target_x_id,coast_nn%x))
-    call handle_error(nf90_get_var(ncid,target_y_id,coast_nn%y))
-    call handle_error(nf90_get_var(ncid,target_area_id,coast_nn%area))
-    call handle_error(nf90_get_var(ncid,target_idx_id,source%idx))
-    call handle_error(nf90_get_var(ncid,dist_id,source%dis))
-
-    !   call handle_error(nf90_get_var(ncid,qc_id,qc))
-    call handle_error(nf90_close(ncid))
-
-  end subroutine read_connection_file_nn
-
   subroutine write_weights_file(source,runoff)
     type(runoff_type), intent(in) :: runoff
     type(source_type), intent(in) :: source
@@ -482,22 +369,5 @@ contains
 
     good = .true. ! placeholder
   end subroutine test_adjacency
-
-  subroutine handle_error(error_flag,isfatal,err_string)
-    ! Simple error handle for NetCDF
-    integer,intent(in) :: error_flag
-    logical, intent(in),optional :: isfatal
-    character(*), intent(in),optional :: err_string
-    logical            :: fatal
-    fatal = .true.
-    if(present(isfatal)) fatal=isfatal
-    if ( error_flag  /= nf90_noerr ) then
-       if ( fatal ) then
-          write(*,*) 'FATAL ERROR:',nf90_strerror(error_flag)
-          if (present(err_string)) write(*,*) trim(err_string)
-          stop
-       endif
-    endif
-  end subroutine handle_error
 
 end program create_runoff_weights

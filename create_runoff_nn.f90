@@ -8,9 +8,6 @@ program create_runoff_nn
 
   implicit none
 
-  real(kind=real64),parameter             :: DEG2RAD = asin(1.0_real64)/90.0_real64  ! PI/180
-  real(kind=real64),parameter             :: REARTH = 6.371d3  !km
-
 
   real(kind=kdkind), allocatable,dimension(:,:) :: pos_source,pos_coast
   type(kdtree2_result) :: results(1)
