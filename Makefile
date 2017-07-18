@@ -42,7 +42,7 @@ FLAGS= ${FLAGSMACHINE} ${FLAGSALWAYS} ${FLAGSOPT} ${INCLUDE}  #  change the last
 
 MY_DIR=`basename ${PWD}`
 
-TARGETS =	create_runoff_nn create_runoff_weights process_runoff create_model_coast create_model_wet create_runoff_weights_spread regrid_runoff
+TARGETS =	create_runoff_nn create_runoff_weights process_runoff create_model_coast create_model_wet create_runoff_weights_spread
 
 all: $(TARGETS)
 
@@ -64,15 +64,10 @@ create_runoff_weights: create_runoff_weights.o kdtree2.o runoff_modules.o
 create_runoff_nn: create_runoff_nn.o kdtree2.o runoff_modules.o
 	${F90} ${FLAGS} -o create_runoff_nn create_runoff_nn.o kdtree2.o  runoff_modules.o ${LDFLAGS} ${LIBS}
 
-regrid_runoff: regrid_runoff.o kdtree2.o runoff_modules.o
-	${F90} ${FLAGS} -o regrid_runoff regrid_runoff.o kdtree2.o runoff_modules.o ${LDFLAGS} ${LIBS}
-
 make_mask: make_mask.o runoff_modules.o
 	${F90} ${FLAGS} -o make_mask make_mask.o runoff_modules.o ${LDFLAGS} ${LIBS}
 
 make_mask.o: runoff_modules.o
-
-regrid_runoff: regrid_runoff.o kdtree2.o runoff_modules.o
 
 create_model_coast.o: runoff_modules.o
 
