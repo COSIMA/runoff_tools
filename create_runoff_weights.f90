@@ -20,12 +20,6 @@ program create_runoff_weights
   implicit none
 
 
-
-  real(kind=real64),parameter             :: DEG2RAD = asin(1.0_real64)/90.0_real64  ! PI/180
-  real(kind=real64),parameter             :: REARTH = 6.371d3  !km
-
-
-
   real(kdkind), allocatable,dimension(:,:) :: pos_source,pos_coast,pos_nn
   type(kdtree2_result),allocatable,dimension(:) :: results
   type(kdtree2),pointer    :: tree
