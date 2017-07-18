@@ -42,7 +42,7 @@ FLAGS= ${FLAGSMACHINE} ${FLAGSALWAYS} ${FLAGSOPT} ${INCLUDE}  #  change the last
 
 MY_DIR=`basename ${PWD}`
 
-TARGETS =	create_runoff_nn create_runoff_weights process_runoff create_model_coast create_model_wet create_runoff_weights_spread
+TARGETS =	create_runoff_nn create_runoff_weights process_runoff create_model_coast create_model_wet create_runoff_weights_spread make_mask
 
 all: $(TARGETS)
 
