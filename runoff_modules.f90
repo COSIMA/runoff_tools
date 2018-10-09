@@ -446,7 +446,7 @@ contains
        print *,trim(dummy),len_trim(dummy)
     enddo
     ! Copy global attributes
-    call handle_error(nf90_inquire_variable(source_info%ncid,NF90_GLOBAL,name=dummy,natts=nats))
+    call handle_error(nf90_inquire(source_info%ncid,nAttributes=nats))
     do i=1,nats
        call handle_error(nf90_inq_attname(source_info%ncid,NF90_GLOBAL,i,dummy))
        call handle_error(nf90_copy_att(source_info%ncid,NF90_GLOBAL,dummy,model_info%ncid,NF90_GLOBAL))
